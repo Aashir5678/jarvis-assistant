@@ -2,7 +2,7 @@ import speech_recognition as sr
 import pyttsx3
 from os import getenv
 from datetime import datetime
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 
 CALLS = ["jarvis", "hey jarvis", "hello jarvis", "jarv", "jarvy", "what's up jarvis", "whats up jarvis", "hey jarv", "yo jarvis", "yo jarv"]
@@ -25,8 +25,8 @@ ADVANCED_REQUESTS = {}
 
 INVALID_THRESHOLD = 3 # Number of times you can 
 
-load_dotenv("key.env")
-API_KEY = getenv("API_KEY")
+# load_dotenv("key.env")
+# API_KEY = getenv("API_KEY")
 
 
 

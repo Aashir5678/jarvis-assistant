@@ -41,13 +41,10 @@ def listen_for_jarvis(mic, rec, engine, name=None, recursive=False):
 
 			try:
 				output = rec.recognize_google(audio).lower().strip()
+				print(output)
 
 			except sr.exceptions.UnknownValueError:
 				continue
-
-			engine.runAndWait()
-			engine.stop()
-
 
 
 	if name is not None:
@@ -198,8 +195,11 @@ if __name__ == "__main__":
 	print("Call for Jarvis")
 
 	engine = pyttsx3.init()
-	mic = sr.Microphone()
+	mic = sr.Microphone(device_index=1)
+	print(mic.list_microphone_names())
 	rec = sr.Recognizer()
+
+
 	engine.setProperty("rate", 180)
 	engine.setProperty("volume", 1.0)
 	engine.setProperty("voice", 1.0)

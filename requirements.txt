@@ -1,0 +1,6 @@
+SpeechRecognitin
+PyAudio
+pyttsx3
+openai
+python-dotenv
+datetime

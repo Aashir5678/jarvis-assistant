@@ -1,4 +1,4 @@
-SpeechRecognitin
+SpeechRecognition
 PyAudio
 pyttsx3
 openai

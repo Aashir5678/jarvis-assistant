@@ -1,12 +1,13 @@
 import speech_recognition as sr
 import pyttsx3
-from os import getenv
+import os
+import time
 from datetime import datetime
 # from dotenv import load_dotenv
 
 
 CALLS = ["jarvis", "hey jarvis", "hello jarvis", "jarv", "jarvy", "what's up jarvis", "whats up jarvis", "hey jarv", "yo jarvis", "yo jarv"]
-DISREGARD = ["disregard", "nothing", "forget it", "never mind", "bye", "stop", "ok bye", "bye jarvis", "all right by", "all right bye", "by", "no", "no by", "no bye"]
+DISREGARD = ["disregard", "nothing", "forget it", "never mind", "bye", "stop", "ok bye", "bye jarvis", "all right by", "all right bye", "by", "no", "no by", "no bye", "buy", "buy jarvis", "all right buy"]
 
 BASIC_REQUESTS = {
 
@@ -20,21 +21,49 @@ BASIC_REQUESTS = {
 
 }
 
-ADVANCED_REQUESTS = {}
+ADVANCED_REQUESTS = ["set a timer", "shutdown"]
 
 
 INVALID_THRESHOLD = 3 # Number of times you can 
 
 # load_dotenv("key.env")
-# API_KEY = getenv("API_KEY")
+# API_KEY = os.getenv("API_KEY")
+
+
+def get_mic_input(mic, rec):
+	output = ""
+
+	with mic as source:
+		rec.adjust_for_ambient_noise(source)
+		audio = rec.listen(source)
+
+
+		try:
+			output = rec.recognize_google(audio).lower().strip()
+
+		except sr.exceptions.UnknownValueError:
+			return output, False
+
+	return output, True
 
 
 
 def listen_for_jarvis(mic, rec, engine, name=None, recursive=False):
+	
 	output = ""
+	# while output not in CALLS or "jarvis" not in output:
+	# 	output, valid = get_mic_input(mic, rec)
+
+	# 	if not valid:
+	# 		continue
+
+	# 	elif 
+
+
+
 
 	with mic as source:
-		while output not in CALLS or "jarvis" not in output:
+		while output not in CALLS and "jarvis" not in output:
 			rec.adjust_for_ambient_noise(source)
 			audio = rec.listen(source)
 
@@ -45,6 +74,8 @@ def listen_for_jarvis(mic, rec, engine, name=None, recursive=False):
 
 			except sr.exceptions.UnknownValueError:
 				continue
+
+			time.sleep(0.5)
 
 
 	if name is not None:
@@ -75,6 +106,7 @@ def listen_for_jarvis(mic, rec, engine, name=None, recursive=False):
 			engine.say("Anything else ?")
 			engine.runAndWait()
 
+		time.sleep(0.1)
 
 	if name is not None:
 		engine.say(f"Bye {name}.")
@@ -92,30 +124,26 @@ def listen_for_jarvis(mic, rec, engine, name=None, recursive=False):
 def process_request(mic, rec, engine, name=None):
 	invalid_count = 0
 	request = ""
+	volume = engine.getProperty("volume")
+	rate = engine.getProperty("rate")
 
 	while invalid_count < INVALID_THRESHOLD:
-		with mic as source:
-			rec.adjust_for_ambient_noise(source)
-			audio = rec.listen(source)
+		request, valid = get_mic_input(mic, rec)
 
-			try:
-				request = rec.recognize_google(audio).lower().strip()
+		if not valid:
+			invalid_count += 1
 
-				if request in DISREGARD or "bye" in request or "no" in request:
-					return request, False
+			if invalid_count < INVALID_THRESHOLD:
+				engine.say("I didn't get that, could you say that again ?")
+				engine.runAndWait()
+				engine.stop()
 
-				break
+		elif request in DISREGARD or "bye" in request or "no" in request:
+			return request, False
 
 
-			except sr.exceptions.UnknownValueError:
-				
-				invalid_count += 1
-
-				if invalid_count < INVALID_THRESHOLD:
-					engine.say("I didn't get that, could you say that again ?")
-					engine.runAndWait()
-					engine.stop()
-
+		else:
+			break
 
 
 
@@ -131,6 +159,74 @@ def process_request(mic, rec, engine, name=None):
 	elif request in BASIC_REQUESTS["change voice"]:
 		engine = change_voice(mic, rec, engine)
 
+	elif request in BASIC_REQUESTS["increase volume"]:
+		if volume >= 1.0:
+			engine.say("Max volume")
+
+		else:
+			volume += 0.05
+			engine.setProperty("volume", volume)
+
+			engine.say("Volume increased")
+
+	elif request in BASIC_REQUESTS["decrease volume"]:
+		if volume <= 0.05:
+			engine.say("Minimum volume")
+
+		else:
+			volume -= 0.05
+			engine.setProperty("volume", volume)
+
+			engine.say("Volume decreased")
+
+	elif request in BASIC_REQUESTS["increase rate"]:
+		rate += 25
+		engine.setProperty("rate", rate)
+		engine.say("Rate of speech increased")
+
+
+	elif request in BASIC_REQUESTS["decrease rate"]:
+		if rate <= 25:
+			engine.say("Minimum rate of speech")
+
+		else:
+			rate -= 25
+			engine.setProperty("rate", rate)
+			engine.say("Rate of speech decreased")
+
+
+
+
+
+	elif request == "shutdown" or "shutdown" in request:
+		engine.say("Are you sure you want to shutdown ?")
+		engine.runAndWait()
+		engine.stop()
+
+		answer, valid = get_mic_input(mic, rec)
+
+		if valid and answer == "yes":
+			engine.say("Shutting down.")
+			engine.runAndWait()
+			engine.stop()
+
+			os.system("shutdown /s /t 0") # Shutdown after 0 seconds
+			return request, False
+
+	elif request == "restart" or "restart" in request:
+		engine.say("Are you sure you want to restart ?")
+		engine.runAndWait()
+		engine.stop()
+
+		answer, valid = get_mic_input(mic, rec)
+
+		if valid and answer == "yes":
+			engine.say("Restarting")
+			engine.runAndWait()
+			engine.stop()
+
+			os.system("shutdown /r /t 0") # Restart after 0 seconds
+			return request, False
 
 
 	else:
@@ -195,8 +291,7 @@ if __name__ == "__main__":
 	print("Call for Jarvis")
 
 	engine = pyttsx3.init()
-	mic = sr.Microphone(device_index=1)
-	print(mic.list_microphone_names())
+	mic = sr.Microphone()
 	rec = sr.Recognizer()
 
 

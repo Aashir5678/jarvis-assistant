@@ -30,7 +30,13 @@ INVALID_THRESHOLD = 3 # Number of times you can
 # API_KEY = os.getenv("API_KEY")
 
 
-def get_mic_input(mic, rec):
+def get_mic_input(mic: sr.Microphone, rec: sr.Recognizer) -> tuple[str, bool]:
+	"""
+	Using mic input, returns any words said, returns the string speech, and a boolean, True if the
+	mic input was legible, otherwise False
+	:rtype: tuple[str, bool]
+
+	"""
 	output = ""
 
 	with mic as source:
@@ -48,7 +54,13 @@ def get_mic_input(mic, rec):
 
 
 
-def listen_for_jarvis(mic, rec, engine, name=None, recursive=False):
+def listen_for_jarvis(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engine, name=None, recursive=False) -> None:
+	"""
+	Listens if Jarvis has been called for, if a name is given then the introduction will include the name
+	:name: str
+	:recursive: bool
+	:rtype: None
+	"""
 	
 	output = ""
 	# while output not in CALLS or "jarvis" not in output:
@@ -121,11 +133,19 @@ def listen_for_jarvis(mic, rec, engine, name=None, recursive=False):
 		listen_for_jarvis(mic, rec, engine, name=name, recursive=recursive)
 
 
-def process_request(mic, rec, engine, name=None):
+def process_request(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engine, name=None) -> tuple[str, bool]:
+	"""
+	Processes a request said in to the mic, and handles any action needed to be done afterwards,
+	returns the request as a string and a boolean indicating whether the request was able to be fufilled.
+
+	:name: str
+	:rtype: tuple[str, bool]
+	"""
 	invalid_count = 0
 	request = ""
-	volume = engine.getProperty("volume")
-	rate = engine.getProperty("rate")
+	volume = engine.getProperty("volume") # Scale from 0.0 to 1.0
+	rate = engine.getProperty("rate") # Rate in words per minute (wpm)
+
 
 	while invalid_count < INVALID_THRESHOLD:
 		request, valid = get_mic_input(mic, rec)
@@ -150,6 +170,10 @@ def process_request(mic, rec, engine, name=None):
 	if invalid_count >= INVALID_THRESHOLD:
 		return request, False
 
+
+
+	# Handle basic requests
+
 	if request in BASIC_REQUESTS["time"]:
 		now = datetime.now()
 		current_time = now.strftime("%I:%M %p")
@@ -158,6 +182,9 @@ def process_request(mic, rec, engine, name=None):
 
 	elif request in BASIC_REQUESTS["change voice"]:
 		engine = change_voice(mic, rec, engine)
+
+
+	# Handle changes to the voice engine
 
 	elif request in BASIC_REQUESTS["increase volume"]:
 		if volume >= 1.0:
@@ -195,10 +222,10 @@ def process_request(mic, rec, engine, name=None):
 			engine.say("Rate of speech decreased")
 
 
+	# Handle remote shutdown / restart
 
 
-
-	elif request == "shutdown" or "shutdown" in request:
+	elif request == "shut down" or "shut down" in request:
 		engine.say("Are you sure you want to shutdown ?")
 		engine.runAndWait()
 		engine.stop()
@@ -229,11 +256,12 @@ def process_request(mic, rec, engine, name=None):
 			return request, False
 
 
+
+
 	else:
 		print(request)
 		engine.say("Irrelevant request, ask again")
 		request = ""
-
 
 
 
@@ -243,7 +271,12 @@ def process_request(mic, rec, engine, name=None):
 	return request, True
 
 
-def change_voice(mic, rec, engine):
+def change_voice(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engine) -> pyttsx3.Engine:
+	"""
+	Changes the voice of the engine as per the user's request, and returns the engine with the new voice
+	:rtype: pyttsx3.Engine
+	"""
+
 	voices = engine.getProperty("voices")
 
 	engine.say("I will cycle through voices, when i'm done talking, say skip to move to the next one, or stop to choose a voice.")
@@ -255,29 +288,26 @@ def change_voice(mic, rec, engine):
 
 	for voice in voices:
 		engine.setProperty("voice", voice.id)
-		engine.say("Hello I'm Jarvis your personal desktop assistant, say my name then state your request.")
+		engine.say("Hello I'm Jarvis your personal desktop assistant.")
 		engine.runAndWait()
 		engine.stop()
 
-		with mic as source:
-			rec.adjust_for_ambient_noise(source)
-			audio = rec.listen(source)
-
-			try:
-				output = rec.recognize_google(audio).lower().strip()
+		output, valid = get_mic_input(mic, rec)
 
 
-			except sr.exceptions.UnknownValueError:
-				continue
+		if not valid:
+			continue
 
 
-		if "stop" in output:
+		elif "stop" in output:
 			engine.say("Voice changed successfully.")
 			engine.runAndWait()
 			engine.stop()
 			
 			break
 
+
+	# If all voices are cycled through and one isn't chosen, set voice back to the one used before asking to change
 	else:
 		engine.setProperty("voice", default_voice)
 
@@ -298,6 +328,7 @@ if __name__ == "__main__":
 	engine.setProperty("rate", 180)
 	engine.setProperty("volume", 1.0)
 	engine.setProperty("voice", 1.0)
+
 
 
 	engine.say("Hello I'm Jarvis your personal desktop assistant, say my name then state your request.")

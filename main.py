@@ -1,5 +1,6 @@
 import speech_recognition as sr
 import pyttsx3
+import numpy as np
 import os
 import time
 from datetime import datetime
@@ -26,6 +27,10 @@ ADVANCED_REQUESTS = ["set a timer", "shutdown"]
 
 INVALID_THRESHOLD = 3 # Number of times you can 
 
+
+CLAP_THRESHOLD = 125 # Amplitude needed to be considered a clap
+DOUBLE_CLAP_THRESHOLD = 0.3 * 1000 # If user claps twice within 0.6 seconds, it's counted as a double clap
+
 # load_dotenv("key.env")
 # API_KEY = os.getenv("API_KEY")
 
@@ -40,52 +45,55 @@ def get_mic_input(mic: sr.Microphone, rec: sr.Recognizer) -> tuple[str, bool]:
 	output = ""
 
 	with mic as source:
-		rec.adjust_for_ambient_noise(source)
-		audio = rec.listen(source)
+		rec.adjust_for_ambient_noise(source, 0.5)
+		try:
+			audio = rec.listen(source, 10) # Wait up to 10 seconds for input
+
+		except sr.exceptions.WaitTimeoutError:
+			return output, False
 
 
 		try:
 			output = rec.recognize_google(audio).lower().strip()
 
 		except sr.exceptions.UnknownValueError:
+
+			if is_clap(audio):
+				return "CLAP", True
+
 			return output, False
 
 	return output, True
 
 
 
-def listen_for_jarvis(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engine, name=None, recursive=False) -> None:
+def listen_for_jarvis(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engine, name:str = None, recursive:bool = False) -> None:
 	"""
 	Listens if Jarvis has been called for, if a name is given then the introduction will include the name
-	:name: str
-	:recursive: bool
 	:rtype: None
 	"""
 	
 	output = ""
-	# while output not in CALLS or "jarvis" not in output:
-	# 	output, valid = get_mic_input(mic, rec)
-
-	# 	if not valid:
-	# 		continue
-
-	# 	elif 
-
-
 
 
 	with mic as source:
 		while output not in CALLS and "jarvis" not in output:
-			rec.adjust_for_ambient_noise(source)
-			audio = rec.listen(source)
-
+			rec.adjust_for_ambient_noise(source, 0.5)
 
 			try:
+				audio = rec.listen(source, 20)
 				output = rec.recognize_google(audio).lower().strip()
 				print(output)
 
-			except sr.exceptions.UnknownValueError:
+			except (sr.exceptions.UnknownValueError, sr.exceptions.WaitTimeoutError) as e:
 				continue
+
+			except sr.exceptions.RequestError:
+				engine.say("Internet connections issue, or API key is not valid, Jarvis is now unavailable.")
+				engine.runAndWait()
+				engine.stop()
+
+				quit()
 
 			time.sleep(0.5)
 
@@ -105,20 +113,20 @@ def listen_for_jarvis(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.En
 	while valid:
 		req, valid = process_request(mic, rec, engine, name=name)
 
-		print (req)
-		if req in CALLS and name is not None:
-			engine.say(f"Yes {name} ?")
-			engine.runAndWait()
+		if req in CALLS:
+			if name is None:
+				engine.say(f"Yes ?")
 
-		elif req in CALLS:
-			engine.say(f"Yes ?")
-			engine.runAndWait()
+			else:
+				engine.say(f"Yes {name} ?")
+
 
 		if valid and req:
+			print (req)
 			engine.say("Anything else ?")
 			engine.runAndWait()
 
-		time.sleep(0.1)
+		time.sleep(0.01)
 
 	if name is not None:
 		engine.say(f"Bye {name}.")
@@ -133,15 +141,16 @@ def listen_for_jarvis(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.En
 		listen_for_jarvis(mic, rec, engine, name=name, recursive=recursive)
 
 
-def process_request(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engine, name=None) -> tuple[str, bool]:
+def process_request(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engine, name:str = None) -> tuple[str, bool]:
 	"""
 	Processes a request said in to the mic, and handles any action needed to be done afterwards,
 	returns the request as a string and a boolean indicating whether the request was able to be fufilled.
 
-	:name: str
 	:rtype: tuple[str, bool]
 	"""
 	invalid_count = 0
+	time_since_last_clap = DOUBLE_CLAP_THRESHOLD
+
 	request = ""
 	volume = engine.getProperty("volume") # Scale from 0.0 to 1.0
 	rate = engine.getProperty("rate") # Rate in words per minute (wpm)
@@ -174,7 +183,7 @@ def process_request(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engi
 
 	# Handle basic requests
 
-	if request in BASIC_REQUESTS["time"]:
+	if request in BASIC_REQUESTS["time"] or "time" in request:
 		now = datetime.now()
 		current_time = now.strftime("%I:%M %p")
 
@@ -238,6 +247,8 @@ def process_request(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engi
 			engine.stop()
 
 			os.system("shutdown /s /t 0") # Shutdown after 0 seconds
+			time.sleep(5) # Wait for system to shutdown
+
 			return request, False
 
 	elif request == "restart" or "restart" in request:
@@ -255,6 +266,16 @@ def process_request(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engi
 			os.system("shutdown /r /t 0") # Restart after 0 seconds
 			return request, False
 
+
+	elif request == "CLAP" and time.time() - time_since_last_clap >= DOUBLE_CLAP_THRESHOLD:
+		# engine.say("User has clapped")
+		print ("user has clapped")
+		time_since_last_clap = time.time()
+
+	elif request == "CLAP" and time.time() - time_since_last_clap < DOUBLE_CLAP_THRESHOLD:
+		engine.say("User has double clapped")
+
+		time_since_last_clap = DOUBLE_CLAP_THRESHOLD
 
 
 
@@ -316,24 +337,48 @@ def change_voice(mic: sr.Microphone, rec: sr.Recognizer, engine: pyttsx3.Engine)
 
 
 
+def is_clap(audio: sr.AudioData, clap_threshold:int = CLAP_THRESHOLD) -> bool:
+	"""
+	Given an sr.AudioData object, will return True if the max amplitude of the audio is greater
+	than clap_threshold.
+	:rtype: bool
+	"""
+
+
+	audio_bytes = audio.get_raw_data()
+
+	byte_arr = np.frombuffer(audio_bytes, dtype=np.int16)
+
+	print (f"Clap amplitude: {str(np.max(np.abs(byte_arr)))}")
+
+	if np.max(np.abs(byte_arr)) >= clap_threshold: # See if the audio amplitude spikes above the clap threshold
+		return True
+
+	return False
+
+
+
+
+
+
 
 if __name__ == "__main__":
 	print("Call for Jarvis")
 
 	engine = pyttsx3.init()
-	mic = sr.Microphone()
+	mic = sr.Microphone(device_index=2)
 	rec = sr.Recognizer()
+
 
 
 	engine.setProperty("rate", 180)
 	engine.setProperty("volume", 1.0)
-	engine.setProperty("voice", 1.0)
-
-
 
 	engine.say("Hello I'm Jarvis your personal desktop assistant, say my name then state your request.")
 	engine.runAndWait()
 	engine.stop()
+
+
 
 
 	listen_for_jarvis(mic, rec, engine, "Aashir", recursive=True)

@@ -4,3 +4,4 @@ pyttsx3
 openai
 python-dotenv
 datetime
+numpy
